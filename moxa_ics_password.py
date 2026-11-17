@@ -8,8 +8,8 @@ Moxa ICS-G7852A / ICS-G7800A (FW 5.x) — расшифровка PasswordEncryp 
 
 Примеры:
   py moxa_ics_password.py
-  py moxa_ics_password.py 010d4b16c89caf600098d1ceda0ad4b5d2433c88530cdaf6872d88e9d6cac6ac
-  py moxa_ics_password.py --encrypt "QR0WTiGA9NB%%"
+  py moxa_ics_password.py 45a42a46c47256a070d333343210fe58b045d9e622e643c54a25de5f7299ad6c
+  py moxa_ics_password.py --encrypt "DEMOpass1"
   py moxa_ics_password.py --selftest
 """
 from __future__ import annotations
@@ -24,9 +24,10 @@ from typing import Optional, Tuple
 # в 128-байтный DES key schedule БЕЗ развёртки (остальные 120 байт — нули).
 KEY = b"MOXA2DES"
 
-# Строка ??? из вашей таблицы (64 hex-символа = 16 байт шифртекста + 16 байт MD5).
+# Встроенный синтетический пример (пароль DEMOpass1).
+# 64 hex-символа = 16 байт шифртекста + 16 байт MD5.
 DEFAULT_TARGET = (
-    "010d4b16c89caf600098d1ceda0ad4b5d2433c88530cdaf6872d88e9d6cac6ac"
+    "45a42a46c47256a070d333343210fe58b045d9e622e643c54a25de5f7299ad6c"
 )
 
 # S/P-таблицы DES из прошивки (8 таблиц по 64 слова, little-endian).
@@ -246,11 +247,11 @@ def vis(data: bytes) -> str:
 
 def _selftest() -> int:
     known = {
-        "QR0WTiGA9NB%%": "010d4b16c89caf60e8de6aabe944c541ed84e35eb326c91129e90d51ce00abdb",
-        "QR0WTiGA9NB%25": "010d4b16c89caf60eb836cd3a8b38841386be7fba1a78246e1a95ea88f29d029",
-        "QR0WTiGA9NB%025": "010d4b16c89caf607c799bdee7933be3a199721a5d7bfcf655c9a3d187175ae5",
-        "QR0WTiGA9NB&#37": "010d4b16c89caf60eebf3b7b050bb7b8137bfa52ea0a885eb31d47234f958c1e",
-        "QR0WTiGA9NB&#x25": "010d4b16c89caf60bd70b92906929c7e040280404db1c8ae4937c4c9f6953265",
+        "EXAMPLEpass": "927dda26b5983e16a0a29d8fd760f0c244dc15830e040fdca05addafedd65617",
+        "EXAMPLE123": "b76973fd3893765138579e75c65a6bd4f70f69c0f62f27b11721a6e8314e0436",
+        "EXAMPLE1": "b76973fd38937651ddd17d6c045025abc6e06b247d2995f6fc4c4f26ba6b6e84",
+        "DEMOuser1": "53a448fb1ddfc03370d333343210fe582eab637c88599c5e3b0dc8651f423b81",
+        "DEMOpass1": "45a42a46c47256a070d333343210fe58b045d9e622e643c54a25de5f7299ad6c",
     }
     failed = 0
     for pw, hx in known.items():
@@ -266,13 +267,13 @@ def _selftest() -> int:
                 print("FAIL decrypt %r -> %r mac=%s" % (pw, pt, mac_ok))
                 failed += 1
     # invertibility of the block cipher
-    for block in (b"QR0WTiGA", b"\x00" * 8, b"abcdefgh"):
+    for block in (b"EXAMPLE1", b"\x00" * 8, b"abcdefgh"):
         if des_block(des_block(block, True), False) != block:
             print("FAIL invert", block)
             failed += 1
-    # built-in ??? row
+    # built-in synthetic default (DEMOpass1)
     pt, mac_ok, _ = decrypt_hex(DEFAULT_TARGET)
-    if not mac_ok or password_from_field(pt) != "QR0WTiGA9":
+    if not mac_ok or password_from_field(pt) != "DEMOpass1":
         print("FAIL target", pt, mac_ok)
         failed += 1
     if failed:
@@ -308,14 +309,14 @@ def main(argv: Optional[list] = None) -> int:
     parser.add_argument(
         "hex",
         nargs="?",
-        help="64 hex-символа из поля PasswordEncryp_N= (по умолчанию — строка ??? из таблицы)",
+        help="64 hex-символа из поля PasswordEncryp_N= (по умолчанию — синтетический пример DEMOpass1)",
     )
     parser.add_argument(
         "--encrypt",
         metavar="PASSWORD",
         help="зашифровать пароль в формат конфигурации",
     )
-    parser.add_argument("--selftest", action="store_true", help="проверить известные пары из таблицы")
+    parser.add_argument("--selftest", action="store_true", help="проверить встроенные синтетические тест-векторы")
     args = parser.parse_args(argv)
 
     if args.selftest:

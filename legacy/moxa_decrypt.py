@@ -7,10 +7,11 @@ WHAT THIS PROGRAM DOES
     The 32-byte hex strings in the table are NOT hashes. They are the account
     password encrypted with a reversible 8-byte block cipher (DES / 3DES /
     Blowfish family) in CBC mode, with a key and IV baked into the device
-    firmware.  Every known password starts with the 8 characters "QR0WTiGA",
-    which is why every row shares the same first ciphertext block:
+    firmware.  The bundled synthetic examples all start with the 8 characters
+    "EXAMPLE1", which is why every known row shares the same first ciphertext
+    block:
 
-        010d4b16c89caf60
+        b76973fd38937651
 
     The password is written into a 32-byte buffer and padded with NUL bytes
     (a PKCS#7-to-32 variant is also tried).  CBC encryption then produces
@@ -18,13 +19,13 @@ WHAT THIS PROGRAM DOES
 
 HONEST LIMITATION
     The firmware key is not published.  This program can decrypt the unknown
-    (???) password ONLY if it recovers that key first.  It does so by trying
+    target password ONLY if it recovers that key first.  It does so by trying
     candidate keys against the known plaintext/ciphertext pairs (a dictionary
     attack, plus an optional numeric PIN brute-force).  A candidate is accepted
     only if it reproduces EVERY known pair.
 
     If the firmware key is a weak or well-known string, a match will be
-    printed and the ??? password will be decrypted in full.  If the key is a
+    printed and the target password will be decrypted in full.  If the key is a
     strong random value, this program will not find it — supply a larger
     wordlist (--wordlist), or extract the key from the device firmware (.rom).
 
@@ -37,7 +38,7 @@ USAGE
     python moxa_decrypt.py
     python moxa_decrypt.py --wordlist keys.txt
     python moxa_decrypt.py --pin 4
-    python moxa_decrypt.py --key moxa --decrypt 010d4b16c89caf60...
+    python moxa_decrypt.py --key moxa --decrypt b76973fd38937651...
 """
 
 from __future__ import annotations
@@ -62,40 +63,44 @@ except ImportError:
 
 
 # ---------------------------------------------------------------------------
-# Known data (verified from the original table)
+# Synthetic known data (EXAMPLE1-prefix family + a couple of DEMO* samples).
+# Ciphertexts were produced by the real ICS-G78xxA 5.x scheme in
+# moxa_ics_password.py (not by ordinary CBC-DES).  They are bundled so the
+# tool still has a consistent 8-byte-block table to inspect; the dictionary
+# attack will not recover MOXA2DES, because that key is loaded without a
+# standard DES key schedule.
 # ---------------------------------------------------------------------------
 
-# plaintext -> 32-byte ciphertext (64 hex chars).  Required constraints.
+# plaintext -> 32-byte value (64 hex chars).  Required constraints.
 KNOWN_PAIRS: Dict[str, str] = {
-    "QR0WTiGA9NB%%":    "010d4b16c89caf60e8de6aabe944c541ed84e35eb326c91129e90d51ce00abdb",
-    "QR0WTiGA9NB":      "010d4b16c89caf60f0770bbddfa936d29c854c73694660e3873d3a9ccbaa0a51",
-    "QR0WTiGA9NB%25":   "010d4b16c89caf60eb836cd3a8b38841386be7fba1a78246e1a95ea88f29d029",
-    "QR0WTiGA9NB%025":  "010d4b16c89caf607c799bdee7933be3a199721a5d7bfcf655c9a3d187175ae5",
-    "QR0WTiGA9NB/%":    "010d4b16c89caf60ba02183519eec8b3d9f583b484101e5d082ffa1c6ca9c420",
-    "QR0WTiGA9NB#":     "010d4b16c89caf60dd285aa1374b721732064d6e05082d5e24684bca9597060e",
-    "QR0WTiGA9NB&#37":  "010d4b16c89caf60eebf3b7b050bb7b8137bfa52ea0a885eb31d47234f958c1e",
-    "QR0WTiGA9N":       "010d4b16c89caf604f09b107b8a59c1918ae362caf710dc6d16ba01d6f04f089",
-    "QR0WTiGA9":        "010d4b16c89caf60cda0a68abc12d992776b83e51b3d1baa52b1a7738e4fc7b9",
-    "QR0WTiGA":         "010d4b16c89caf6095ffdc287887e7acce10749887d1b3cb49e40595f83ed754",
-    "QR0WTiGA9NB&#x25": "010d4b16c89caf60bd70b92906929c7e040280404db1c8ae4937c4c9f6953265",
+    "EXAMPLE1":      "b76973fd38937651ddd17d6c045025abc6e06b247d2995f6fc4c4f26ba6b6e84",
+    "EXAMPLE12":     "b76973fd389376510d253e774b47fdf847b331ea18e63cc1c339801c355be652",
+    "EXAMPLE123":    "b76973fd3893765138579e75c65a6bd4f70f69c0f62f27b11721a6e8314e0436",
+    "EXAMPLE1x":     "b76973fd38937651d94ae2311e3b6a0f49ce23b6a721105228d9515c5b8a450a",
+    "EXAMPLE1ab":    "b76973fd389376513f1a54a8ecdf23ee98eacba8873234b6e16f140c6be3197f",
+    "EXAMPLE1#":     "b76973fd389376517e7e8b8556458019e30e5c6aaf3d3fc3ac6d14b8f144e53b",
+    "EXAMPLE1%":     "b76973fd3893765101e26ef0fb161c3e9cdbb7b4e1327d01b66b56603fc0888b",
+    "EXAMPLE1pass":  "b76973fd389376511e7c922314fcf0c4c4c9b66f5a3271e56f18709e5f21d386",
+    "EXAMPLE1user":  "b76973fd38937651e149872e7cc0da589fec7e3e23d3f2da04f7d3a5fb29d712",
+    "EXAMPLE1!!":    "b76973fd3893765168e47897a079d5457b1fd1b224305e671d905a2ce9069c39",
+    "EXAMPLE1xy":    "b76973fd389376517b3814b5aae34f54a994ba84786f6caf2752cc229a196191",
 }
 
-# The ??? row: unknown plaintext, same first block, this is what we want.
+# Built-in synthetic target (password DEMOpass1).  First block differs
+# because this plaintext does not start with "EXAMPLE1".
 TARGET_HEX = (
-    "010d4b16c89caf600098d1ceda0ad4b5d2433c88530cdaf6872d88e9d6cac6ac"
+    "45a42a46c47256a070d333343210fe58b045d9e622e643c54a25de5f7299ad6c"
 )
 
-# Reference-only rows (not used as required constraints):
-# one ciphertext was labelled as "QR0WTiGA9NB" plus 1 or 2 trailing spaces —
-# both cannot be correct at once (they would collide under a real block
-# cipher), so the row is kept for a post-match check only.
+# Reference-only rows (not used as required constraints).
+# Another EXAMPLE1-prefix ciphertext, kept for a post-match check only.
 SPACE_CT_HEX = (
-    "010d4b16c89caf607f75cf26110d9e6270ebb9f727614822b01b6a76b50da5a4"
+    "b76973fd38937651e5161abbbf83238d0dd19974690715a0d0c88742ddbef770"
 )
-# Unlabelled top-of-table value; first block is different, so it does not
-# start with "QR0WTiGA" under the same IV.  Decrypted only if a key is found.
+# Synthetic value with a different first block (plaintext DEMOuser1).
+# Decrypted only if a key is found.
 UNLABELLED_HEX = (
-    "6b59250ce42b3c1c4791a6fccf8f57958e27e8be2d020fb8ce89d101f123d608"
+    "53a448fb1ddfc03370d333343210fe582eab637c88599c5e3b0dc8651f423b81"
 )
 
 BLOCK = 8
@@ -370,9 +375,9 @@ def builtin_wordlist() -> List[bytes]:
         "abcdefgh", "ABCDEFGH", "aaaabbbb", "abcd1234",
         "private", "secret", "Secret", "SECRET", "public", "Public",
         "cisco", "Cisco", "CISCO",
-        # the known password itself and pieces of it
-        "QR0WTiGA9NB%", "QR0WTiGA9NB", "QR0WTiGA", "QR0WTiGA9",
-        "QR0WTiGA9NB%%", "9NB%", "9NB",
+        # the synthetic example passwords and pieces of them
+        "EXAMPLE1", "EXAMPLE12", "EXAMPLE123", "EXAMPLE1pass",
+        "EXAMPLE1user", "DEMOpass1", "DEMOuser1",
         # product-line / model strings (4000 DIN-rail, 7000 4U, related)
         "EDS", "eds", "EDS-G512E", "EDSG512E", "eds-g512e", "EDS_G512E",
         "MDS", "mds", "MDS-G4000", "MDSG4000", "mds-g4000",
@@ -411,8 +416,8 @@ def builtin_wordlist() -> List[bytes]:
 
     # Raw binary patterns worth a cheap try.
     result.append(b"")
-    result.append(bytes.fromhex("010d4b16c89caf60"))          # the constant C1
-    result.append(b"QR0WTiGA")
+    result.append(bytes.fromhex("b76973fd38937651"))          # the constant C1
+    result.append(b"EXAMPLE1")
     for n in (8, 16, 24):
         result.append(b"\x00" * n)
         result.append(b"\xff" * n)
@@ -647,7 +652,7 @@ def print_match(match: Match) -> None:
             print("  OK    %r" % password)
     print("  %s" % ("All known pairs reproduced." if ok else "WARNING: some pairs did not match."))
     print()
-    print("Decrypted ??? password:")
+    print("Decrypted built-in target:")
     pt = decrypt_hex(match, TARGET_HEX)
     print(format_plaintext(pt, match.padding))
     print()
@@ -669,7 +674,7 @@ def print_match(match: Match) -> None:
 # ---------------------------------------------------------------------------
 
 def run_selftest() -> int:
-    print("Self-test 1/2: CBC / 8-byte-block model on the real known pairs")
+    print("Self-test 1/2: CBC / 8-byte-block model on the synthetic known pairs")
     any_ok = False
     for scheme in (PADDING_NULL, PADDING_PKCS7):
         ok, msg = model_is_consistent(KNOWN_PAIRS, scheme)
@@ -757,7 +762,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
             "  python moxa_decrypt.py --pin 4\n"
             "  python moxa_decrypt.py --selftest\n"
             "  python moxa_decrypt.py --key-hex 6d6f786100000000 --cipher DES "
-            "--iv 0011223344556677 --decrypt 010d4b16...\n"
+            "--iv 0011223344556677 --decrypt b76973fd...\n"
             "\n"
             "wordlist format: one candidate per line, UTF-8.  Lines starting with\n"
             "# are comments.  A raw binary key can be given as  hex:0011223344556677\n"
@@ -801,7 +806,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     p.add_argument(
         "--decrypt", metavar="HEX",
         help="decrypt a 32-byte (64 hex character) value once a key is known. "
-             "If a search is also requested, it runs first.  The built-in ??? "
+             "If a search is also requested, it runs first.  The built-in target "
              "target is always decrypted automatically when a key is found.",
     )
     p.add_argument(
@@ -927,7 +932,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("NO KEY FOUND")
         print("=" * 72)
         print("The firmware key is not among the candidates that were tried.")
-        print("The ??? password cannot be decrypted without that key.")
+        print("The target password cannot be decrypted without that key.")
         print()
         print("What you can do next:")
         print("  1. Run again with a larger wordlist:")
@@ -940,7 +945,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("         python moxa_decrypt.py --key-hex ... --cipher DES --iv ... --decrypt ...")
         print("  4. Or use the original Moxa tool / the same switch that produced the")
         print("     table: feed it more candidate passwords and compare the output with")
-        print("     the ??? row (that tool already holds the key).")
+        print("     the target value (that tool already holds the key).")
         print("=" * 72)
         return 1
 
